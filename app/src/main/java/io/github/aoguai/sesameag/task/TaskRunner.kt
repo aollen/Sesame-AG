@@ -19,6 +19,7 @@ import io.github.aoguai.sesameag.util.Log
 import io.github.aoguai.sesameag.util.Notify.updateRunningNextExec
 import io.github.aoguai.sesameag.util.TimeUtil
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -27,6 +28,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -57,6 +59,13 @@ class CoroutineTaskRunner(allModels: List<Model>) {
     private val failureCount = AtomicInteger(0)
     private val skippedCount = AtomicInteger(0)
     private val taskExecutionTimes = ConcurrentHashMap<String, Long>()
+    private val longRunningJobs = ConcurrentLinkedQueue<LongRunningJob>()
+
+    private data class LongRunningJob(
+        val taskId: String,
+        val startTime: Long,
+        val job: Job
+    )
 
     /**
      * 启动任务执行流程
@@ -94,6 +103,8 @@ class CoroutineTaskRunner(allModels: List<Model>) {
                 executeRound(round, rounds, status)
             }
 
+            awaitLongRunningJobs()
+
             if (CustomSettings.onlyOnceDaily.value == true) {
                 // 确保时间状态是最新的
                 TaskCommon.update()
@@ -110,6 +121,7 @@ class CoroutineTaskRunner(allModels: List<Model>) {
         } catch (e: Exception) {
             Log.printStackTrace(TAG, "任务流程异常", e)
         } finally {
+            awaitLongRunningJobs()
             printExecutionSummary(startTime, System.currentTimeMillis())
             scheduleNext()
         }
@@ -249,29 +261,23 @@ class CoroutineTaskRunner(allModels: List<Model>) {
 
         val isWhitelist = isLongRunningTask(task, taskName)
 
-        // 如果是白名单任务（如森林），它们往往是“启动后即视为完成”，或者是长运行任务
-        // 我们可以给一个较短的“启动超时时间”，而不是等待整个任务结束
-        val timeout = if (isWhitelist) 30_000L else (BaseModel.taskTimeout.value ?: DEFAULT_TASK_TIMEOUT).toLong()
+        val timeout = (BaseModel.taskTimeout.value ?: DEFAULT_TASK_TIMEOUT).toLong()
 
         try {
             Log.record(TAG, "▶️ 启动: $taskId")
             task.addRunCents()
 
-            withTimeout(timeout) {
-                // startTask 是一个 suspend 函数，或者返回一个 Job
-                // 假设 task.startTask 现在是 suspend 的，或者我们 wrap 一下
-                val job = task.startTask(force = false, rounds = 1)
-
-                // 如果是白名单任务，我们只等待它启动成功（job active），不 join
-                if (isWhitelist) {
-                    if (job.isActive) {
-                        Log.record(TAG, "✨ $taskId 启动成功 (后台运行中)")
-                        return@withTimeout
-                    }
+            val job = task.startTask(force = false, rounds = 1)
+            if (isWhitelist) {
+                longRunningJobs.add(LongRunningJob(taskId, startTime, job))
+                if (job.isActive) {
+                    Log.record(TAG, "✨ $taskId 启动成功 (后台运行中)")
                 }
-
-                // 普通任务等待完成
-                job.join()
+                return
+            } else {
+                withTimeout(timeout) {
+                    job.join()
+                }
             }
 
             // 成功
@@ -283,23 +289,32 @@ class CoroutineTaskRunner(allModels: List<Model>) {
         } catch (e: TimeoutCancellationException) {
             val time = System.currentTimeMillis() - startTime
 
-            if (isWhitelist) {
-                // 白名单任务超时通常意味着它还在后台跑，视作成功
-                successCount.incrementAndGet()
-                taskExecutionTimes[taskId] = time
-                Log.record(TAG, "✅ $taskId 已运行 ${time}ms (后台继续)")
-            } else {
-                // 普通任务超时 -> 失败
-                failureCount.incrementAndGet()
-                Log.error(TAG, "⏰ 超时: $taskId (${time}ms > ${timeout}ms)")
-                // 尝试停止任务
-                task.stopTask()
-            }
+            failureCount.incrementAndGet()
+            Log.error(TAG, "⏰ 超时: $taskId (${time}ms > ${timeout}ms)")
+            // 尝试停止任务
+            task.stopTask()
 
         } catch (e: Exception) {
             val time = System.currentTimeMillis() - startTime
             failureCount.incrementAndGet()
             Log.error(TAG, "❌ 失败: $taskId (${e.message})")
+        }
+    }
+
+    private suspend fun awaitLongRunningJobs() {
+        var loggedWait = false
+        while (true) {
+            val longRunningJob = longRunningJobs.peek() ?: break
+            if (!loggedWait) {
+                loggedWait = true
+                Log.record(TAG, "⏳ 等待白名单长任务完成后再调度下次执行")
+            }
+            longRunningJob.job.join()
+            longRunningJobs.remove(longRunningJob)
+            val time = System.currentTimeMillis() - longRunningJob.startTime
+            successCount.incrementAndGet()
+            taskExecutionTimes[longRunningJob.taskId] = time
+            Log.record(TAG, "✅ 完成: ${longRunningJob.taskId} (耗时: ${time}ms)")
         }
     }
 
