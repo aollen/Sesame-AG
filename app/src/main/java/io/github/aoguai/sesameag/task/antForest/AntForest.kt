@@ -336,6 +336,10 @@ class AntForest : ModelTask(), EnergyCollectCallback {
         return collectEnergy?.value == true
     }
 
+    internal fun isTakeLookEnergyEnabled(): Boolean {
+        return isCollectEnergyEnabled() && batchRobEnergy?.value == true
+    }
+
     private fun hasRebornProtectWorkEnabled(): Boolean {
         val type = helpFriendCollectType?.value ?: HelpFriendCollectType.NONE
         if (type == HelpFriendCollectType.NONE || rebornWeeklyCompleted) {
@@ -1650,12 +1654,21 @@ class AntForest : ModelTask(), EnergyCollectCallback {
         userId: String?,
         fromAct: String?,
         forceRefresh: Boolean = false,
-        source: String? = null
+        source: String? = null,
+        fallbackFromAct: String? = null
     ): JSONObject? {
         val safeUserId = FriendGuard.normalizeUserId(userId) ?: return null
         val actualFromAct = fromAct ?: "TAKE_LOOK_FRIEND"
-        if (FriendGuard.shouldSkipFriend(safeUserId, TAG, "查询好友森林主页[$actualFromAct]")) {
-            return null
+        val allowPkRelation = actualFromAct == "PKContest" || fallbackFromAct == "PKContest"
+        if (allowPkRelation) {
+            if (FriendGuard.isSelf(safeUserId)) {
+                Log.record(TAG, "查询好友森林主页[$actualFromAct] 跳过自己账号[$safeUserId]")
+                return null
+            }
+        } else {
+            if (FriendGuard.shouldSkipFriend(safeUserId, TAG, "查询好友森林主页[$actualFromAct]")) {
+                return null
+            }
         }
         val cacheKey = "$safeUserId#$actualFromAct#${source ?: "default"}"
         if (!forceRefresh) {
@@ -1672,6 +1685,13 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             friendHomeObj = JSONObject(response)
             val resultCode = friendHomeObj.optString("resultCode")
             val resultDesc = friendHomeObj.optString("resultDesc")
+            if (resultDesc.contains("好友信息不存在") &&
+                !fallbackFromAct.isNullOrBlank() &&
+                fallbackFromAct != actualFromAct
+            ) {
+                Log.forest(TAG, "查询好友森林主页[$actualFromAct]返回好友信息不存在，改用[$fallbackFromAct]补查[$safeUserId]")
+                return queryFriendHome(safeUserId, fallbackFromAct, forceRefresh = true, source = source)
+            }
             if (resultCode == "FRIEND_NOT_FOREST_USER" || resultDesc.contains("未开通")) {
                 Log.forest(TAG, "蚂蚁森林好友流程跳过[${UserMap.getMaskName(safeUserId) ?: safeUserId}]：对方未开通蚂蚁森林")
                 return null
@@ -2302,10 +2322,6 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             Log.forest(TAG, "收集能量或PK榜收取未开启，跳过PK排行榜扫描")
             return
         }
-        if (Status.hasFlagToday(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)) {
-            Log.forest(TAG, "PK排行榜：今日已判定无需处理，跳过以避免风控")
-            return
-        }
 
         collectRankingsCoroutine(
             "PK排行榜",
@@ -2313,13 +2329,25 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             "totalData",
             "pk",
             JsonPredicate { pkObject: JSONObject? ->
-                val memberStatus = pkObject?.optString("rankMemberStatus")
-                if (memberStatus != "JOIN") {
-                    Log.forest(TAG, "未加入PK排行榜/赛季未开启，今日跳过PK任务以避免风控")
-                    Status.setFlagToday(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)
+                val memberStatus = pkObject?.optString("rankMemberStatus").orEmpty()
+                if (memberStatus == "JOIN") {
+                    if (Status.hasFlagToday(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)) {
+                        Log.forest(TAG, "PK排行榜：复核到赛季状态为JOIN，清除今日跳过标记并执行补全")
+                        Status.removeFlag(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)
+                    }
+                    return@JsonPredicate true
+                }
+                if (memberStatus.isBlank()) {
+                    Log.forest(TAG, "PK排行榜状态为空，暂不写入今日跳过标记")
                     return@JsonPredicate false
                 }
-                true
+                if (Status.hasFlagToday(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)) {
+                    Log.forest(TAG, "PK排行榜：今日已判定无需处理，复核状态[$memberStatus]仍不可补全，跳过")
+                } else {
+                    Log.forest(TAG, "未加入PK排行榜/赛季未开启[$memberStatus]，今日跳过PK补全以避免风控")
+                    Status.setFlagToday(StatusFlags.FLAG_ANTFOREST_PK_SKIP_TODAY)
+                }
+                false
             }
         )
     }
@@ -2334,7 +2362,11 @@ class AntForest : ModelTask(), EnergyCollectCallback {
      */
     internal fun collectEnergyByTakeLook(source: String? = null) {
         if (!isCollectEnergyEnabled()) {
-            Log.forest(TAG, "收集能量开关关闭，跳过找能量")
+            Log.forest(TAG, "收集能量开关关闭，跳过找能量接口")
+            return
+        }
+        if (!isTakeLookEnergyEnabled()) {
+            Log.forest(TAG, "一键收取开关关闭，跳过找能量接口")
             return
         }
         // 1. 冷却检查
@@ -2347,14 +2379,13 @@ class AntForest : ModelTask(), EnergyCollectCallback {
 
         val tc = TimeCounter(TAG)
         var foundCount = 0
-        val maxAttempts = 10
+        val maxAttempts = TAKE_LOOK_MAX_ATTEMPTS
         var consecutiveEmpty = 0
         var shouldCooldown = false
+        var firstTakeLook = true
 
         // 本地去重集合：防止单次运行中服务器重复返回同一个有保护罩的人
         val visitedInSession = mutableSetOf<String>()
-        // 空参数对象，仅为了满足接口签名（如果接口允许传null这里可以改为null）
-        val emptyParam = JSONObject()
 
         Log.forest(TAG, "开始找能量 (服务器自动轮询)")
 
@@ -2362,8 +2393,13 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             loop@ for (attempt in 1..maxAttempts) {
                 // A. 调用接口
                 val takeLookResult = try {
-                    // 传空参，由服务器自动分配
-                    val resStr = AntForestRpcCall.takeLook(emptyParam, source)
+                    val resStr = AntForestRpcCall.takeLook(
+                        buildTakeLookSkipUsers(),
+                        source,
+                        exposedUserId = if (firstTakeLook) selfId.orEmpty() else "",
+                        takeLookStart = firstTakeLook
+                    )
+                    firstTakeLook = false
                     JSONObject(resStr)
                 } catch (e: Exception) {
                     Log.printStackTrace(TAG, "找能量接口异常", e)
@@ -2376,8 +2412,12 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                     break@loop
                 }
 
-                // C. 核心判断：获取 friendId
+                val takeLookEnded = takeLookResult.optBoolean("takeLookEnd", false)
                 val friendId = takeLookResult.optString("friendId")
+                if (takeLookEnded && friendId.isBlank()) {
+                    Log.forest(TAG, "找能量已达到官方结束状态，结束")
+                    break@loop
+                }
 
                 // 如果 friendId 为空，说明服务器那边已经没有可以收取的对象了
                 if (friendId.isNullOrBlank()) {
@@ -2412,12 +2452,25 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                 // 标记已访问
                 visitedInSession.add(friendId)
 
+                if (processedUsersCache.contains(friendId)) {
+                    consecutiveEmpty++
+                    Log.forest(TAG, "本轮已处理用户($friendId)，跳过")
+                    continue@loop
+                }
+
                 // F. 检查全局黑名单 (如之前炸弹被记录的人)
                 if (skipUsersCache.containsKey(friendId)) {
+                    processedUsersCache.add(friendId)
+                    consecutiveEmpty++
+                    Log.forest(TAG, "找能量返回已跳过用户($friendId)，跳过")
+                    if (takeLookEnded) {
+                        Log.forest(TAG, "找能量已达到官方结束状态，结束")
+                        break@loop
+                    }
                     continue@loop
                 }
                 // G. 查询主页详情
-                val friendHomeObj = queryFriendHome(friendId, null, source = source)
+                val friendHomeObj = queryTakeLookFriendHome(friendId, source)
                 if (friendHomeObj == null) {
                     continue@loop
                 }
@@ -2433,7 +2486,8 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                     Log.forest(TAG, "发现[$friendName]有$type，跳过")
                     // 记录到全局缓存，防止下次运行再次浪费时间查询
                     addToSkipUsers(friendId)
-                    // 注意：这里不需要传给服务器 skipUsers，因为我们单纯不收，服务器下次轮询可能还会给，但被上面的 visitedInSession 拦截
+                    processedUsersCache.add(friendId)
+                    // 后续 takeLook 请求会带上 skipUsers，排行榜补齐也会通过 processedUsersCache 跳过本轮已确认保护的好友
                 } else {
                     // I. 收取能量
                     collectEnergy(friendId, friendHomeObj, "takeLook", rpcSource = source)
@@ -2444,6 +2498,10 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                 }
                 if (hasShield || hasBomb) {
                     handleFriendExtraBenefits(friendId, friendHomeObj)
+                }
+                if (takeLookEnded) {
+                    Log.forest(TAG, "找能量已处理官方结束前最后一个目标，结束")
+                    break@loop
                 }
             }
         } catch (e: Exception) {
@@ -2470,6 +2528,10 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             Log.forest(TAG, "收集能量开关关闭，跳过快速找能量")
             return
         }
+        if (!isTakeLookEnergyEnabled()) {
+            Log.forest(TAG, "一键收取开关关闭，跳过快速找能量接口")
+            return
+        }
         // 1. 冷却检查
         val currentTime = System.currentTimeMillis()
         if (currentTime < nextTakeLookTime) {
@@ -2480,13 +2542,13 @@ class AntForest : ModelTask(), EnergyCollectCallback {
 
         val tc = TimeCounter(TAG)
         var foundCount = 0
-        val maxAttempts = 10
+        val maxAttempts = TAKE_LOOK_MAX_ATTEMPTS
         var consecutiveEmpty = 0
         var shouldCooldown = false
+        var firstTakeLook = true
 
         // 本地去重集合：只防止单次运行中死循环刷同一个人，不跨运行记忆
         val visitedInSession = mutableSetOf<String>()
-        val emptyParam = JSONObject()
 
         Log.forest(TAG, "开始找能量 (无视黑名单与道具)")
 
@@ -2494,7 +2556,12 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             loop@ for (attempt in 1..maxAttempts) {
                 // A. 调用接口
                 val takeLookResult = try {
-                    val resStr = AntForestRpcCall.takeLook(emptyParam)
+                    val resStr = AntForestRpcCall.takeLook(
+                        buildTakeLookSkipUsers(),
+                        exposedUserId = if (firstTakeLook) selfId.orEmpty() else "",
+                        takeLookStart = firstTakeLook
+                    )
+                    firstTakeLook = false
                     JSONObject(resStr)
                 } catch (e: Exception) {
                     Log.printStackTrace(TAG, "找能量接口异常", e)
@@ -2507,8 +2574,12 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                     break@loop
                 }
 
-                // C. 获取 friendId
+                val takeLookEnded = takeLookResult.optBoolean("takeLookEnd", false)
                 val friendId = takeLookResult.optString("friendId")
+                if (takeLookEnded && friendId.isBlank()) {
+                    Log.forest(TAG, "找能量已达到官方结束状态，结束")
+                    break@loop
+                }
 
                 // 如果 friendId 为空，说明服务器无目标推荐
                 if (friendId.isNullOrBlank()) {
@@ -2541,10 +2612,21 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                 // 标记已访问
                 visitedInSession.add(friendId)
 
+                if (processedUsersCache.contains(friendId)) {
+                    consecutiveEmpty++
+                    Log.forest(TAG, "本轮已处理用户($friendId)，跳过")
+                    continue@loop
+                }
+
                 // G. 查询主页详情 (获取能量球ID必须步骤)
-                val friendHomeObj = queryFriendHome(friendId, null)
+                val friendHomeObj = queryTakeLookFriendHome(friendId)
                 if (friendHomeObj == null) {
                     continue@loop
+                }
+
+                val now = System.currentTimeMillis()
+                if (hasShield(friendHomeObj, now) || hasBombCard(friendHomeObj, now)) {
+                    addToSkipUsers(friendId)
                 }
 
                 // I. 直接收取能量
@@ -2554,6 +2636,10 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                 foundCount++
                 consecutiveEmpty = 0 // 重置空计数
 
+                if (takeLookEnded) {
+                    Log.forest(TAG, "找能量已处理官方结束前最后一个目标，结束")
+                    break@loop
+                }
             }
         } catch (e: Exception) {
             Log.printStackTrace(TAG, "找能量流程异常", e)
@@ -2582,6 +2668,24 @@ class AntForest : ModelTask(), EnergyCollectCallback {
         } catch (e: Exception) {
             Log.printStackTrace(TAG, "添加跳过用户失败", e)
         }
+    }
+
+    private fun buildTakeLookSkipUsers(): JSONObject {
+        val skipUsers = JSONObject()
+        try {
+            skipUsersCache.forEach { (userId, reason) ->
+                if (userId.isNotBlank()) {
+                    skipUsers.put(userId, reason)
+                }
+            }
+        } catch (e: Exception) {
+            Log.printStackTrace(TAG, "构建找能量跳过用户失败", e)
+        }
+        return skipUsers
+    }
+
+    private fun queryTakeLookFriendHome(userId: String, source: String? = null): JSONObject? {
+        return queryFriendHome(userId, null, source = source, fallbackFromAct = "PKContest")
     }
 
     /**
@@ -2720,9 +2824,19 @@ class AntForest : ModelTask(), EnergyCollectCallback {
     @Throws(Exception::class)
     private fun processEnergyInternal(obj: JSONObject, flag: String?) {
         if (errorWait) return
-        val userId = obj.getString("userId")
+        val userId = FriendGuard.normalizeUserId(obj.optString("userId"))
         val isPk = "pk" == flag
-        if (FriendGuard.shouldSkipFriend(userId, TAG, if (isPk) "PK好友收能量" else "好友收能量")) {
+        val sceneName = if (isPk) "PK好友收能量" else "好友收能量"
+        if (userId == null) {
+            Log.record(TAG, "$sceneName 跳过：userId为空")
+            return
+        }
+        if (isPk) {
+            if (FriendGuard.isSelf(userId)) {
+                Log.record(TAG, "$sceneName 跳过自己账号[$userId]")
+                return
+            }
+        } else if (FriendGuard.shouldSkipFriend(userId, TAG, sceneName)) {
             return
         }
         // 检查是否在"手速太快"冷却期
@@ -2742,6 +2856,10 @@ class AntForest : ModelTask(), EnergyCollectCallback {
             val needCollectEnergy = collectEnergy?.value == true && pkEnergy?.value == true
             if (!needCollectEnergy) {
                 Log.forest(TAG, "    PK好友: [$userName$userId], 不满足收取条件，跳过")
+                return
+            }
+            if (processedUsersCache.contains(userId)) {
+                Log.forest(TAG, "    PK好友: [$userName$userId], 本轮已处理，跳过主页查询")
                 return
             }
             Log.forest(TAG, "  正在查询PK好友 [$userName$userId] 的主页...")
@@ -3024,8 +3142,8 @@ class AntForest : ModelTask(), EnergyCollectCallback {
 
                 val responseString: String = rpcEntity.responseString ?: ""
                 val jo = JSONObject(responseString)
-                val resultCode = jo.getString("resultCode")
-                if (!"SUCCESS".equals(resultCode, ignoreCase = true)) {
+                val resultCode = jo.optString("resultCode")
+                if (!jo.optBoolean("success") && !"SUCCESS".equals(resultCode, ignoreCase = true)) {
                     if ("PARAM_ILLEGAL2" == resultCode) {
                         Log.forest(TAG, "[" + getAndCacheUserName(userId) + "]" + "能量已被收取,取消重试 错误:" + jo.getString("resultDesc"))
                         return@Runnable
@@ -3042,6 +3160,12 @@ class AntForest : ModelTask(), EnergyCollectCallback {
                         collectEnergy(collectEnergyEntity)
                     }
                     return@Runnable
+                }
+                if ("PARTIAL_SUCCESS".equals(resultCode, ignoreCase = true)) {
+                    val failedBubbleIds = jo.optJSONArray("failedBubbleIds")
+                    if (failedBubbleIds != null && failedBubbleIds.length() > 0) {
+                        Log.runtime(TAG, "[" + getAndCacheUserName(userId) + "]收取能量部分成功: " + jo.optString("resultDesc") + ", failedBubbleIds=" + failedBubbleIds)
+                    }
                 }
 
                 // 炸弹卡效果：记录“被炸”掉的能量
@@ -6354,6 +6478,7 @@ class AntForest : ModelTask(), EnergyCollectCallback {
 
         // 找能量功能的冷却时间（毫秒），15分钟
         private const val TAKE_LOOK_COOLDOWN_MS = 15 * 60 * 1000L
+        private const val TAKE_LOOK_MAX_ATTEMPTS = 80
 
         /**
          * 下次可以执行找能量的时间戳

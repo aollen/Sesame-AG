@@ -61,11 +61,18 @@ class ForestChouChouLe {
                 ).any { it.contains("任务已完成") || it.contains("任务已完结") }
         }
 
+        private fun extractTaskName(bizInfo: JSONObject, fallback: String): String {
+            return bizInfo.optString("title")
+                .ifBlank { bizInfo.optString("taskTitle") }
+                .ifBlank { bizInfo.optString("taskContent") }
+                .ifBlank { fallback }
+        }
+
         // 动态获取抽奖场景配置
         private fun getScenes(): List<Scene> {
             val defaultScenes = listOf(
-                Scene("2025112701", SCENE_NORMAL, "森林寻宝", StatusFlags.FLAG_ANTFOREST_CHOUCHOULE_NORMAL_COMPLETED),
-                Scene("20251024", SCENE_ACTIVITY, "森林寻宝IP", StatusFlags.FLAG_ANTFOREST_CHOUCHOULE_ACTIVITY_COMPLETED)
+                Scene("2026040301", SCENE_NORMAL, "森林抽抽乐普通版", StatusFlags.FLAG_ANTFOREST_CHOUCHOULE_NORMAL_COMPLETED),
+                Scene("20260423", SCENE_ACTIVITY, "森林抽抽乐活动版", StatusFlags.FLAG_ANTFOREST_CHOUCHOULE_ACTIVITY_COMPLETED)
             )
 
             return runCatching {
@@ -240,7 +247,7 @@ class ForestChouChouLe {
             val taskStatus = baseInfo.optString("taskStatus")
             val bizInfoStr = baseInfo.optString("bizInfo")
             val taskName = if (bizInfoStr.isNotEmpty()) {
-                JSONObject(bizInfoStr).optString("title", taskType)
+                extractTaskName(JSONObject(bizInfoStr), taskType)
             } else taskType
 
             if (isBlockedTask(taskType, taskName)) continue
@@ -284,7 +291,7 @@ class ForestChouChouLe {
         val bizInfoStr = baseInfo.optString("bizInfo")
         val bizInfo = if (bizInfoStr.isNotEmpty()) JSONObject(bizInfoStr) else JSONObject()
 
-        val taskName = bizInfo.optString("title", "未知任务")
+        val taskName = extractTaskName(bizInfo, "未知任务")
         val taskCode = baseInfo.optString("sceneCode")
         val taskStatus = baseInfo.optString("taskStatus")
         val taskType = baseInfo.optString("taskType")

@@ -25,6 +25,7 @@ object AntForestRpcCall {
     private var HOME_PAGE_VERSION = "20250818"
     private var TASK_LIST_VERSION = "20250821"
     private var TASK_LIST_EXT_VERSION = "20260109"
+    private var TAKE_LOOK_VERSION = "20260107"
 
     @JvmStatic
     fun init() {
@@ -37,6 +38,7 @@ object AntForestRpcCall {
                     HOME_PAGE_VERSION = "20250818"
                     TASK_LIST_VERSION = "20250821"
                     TASK_LIST_EXT_VERSION = "20260109"
+                    TAKE_LOOK_VERSION = "20260107"
                 }
 
                 "10.7.30.8000" -> {
@@ -44,6 +46,7 @@ object AntForestRpcCall {
                     HOME_PAGE_VERSION = "20250813"
                     TASK_LIST_VERSION = "20250813"
                     TASK_LIST_EXT_VERSION = "20250813"
+                    TAKE_LOOK_VERSION = "20250813"
                 }
 
                 "10.5.88.8000" -> {
@@ -51,6 +54,7 @@ object AntForestRpcCall {
                     HOME_PAGE_VERSION = "20240403"
                     TASK_LIST_VERSION = "20240403"
                     TASK_LIST_EXT_VERSION = "20240403"
+                    TAKE_LOOK_VERSION = "20240403"
                 }
 
                 "10.3.96.8100" -> {
@@ -58,6 +62,7 @@ object AntForestRpcCall {
                     HOME_PAGE_VERSION = "20230501"
                     TASK_LIST_VERSION = "20230501"
                     TASK_LIST_EXT_VERSION = "20230501"
+                    TAKE_LOOK_VERSION = "20230501"
                 }
 
                 else -> {
@@ -65,6 +70,7 @@ object AntForestRpcCall {
                     HOME_PAGE_VERSION = "20250818"
                     TASK_LIST_VERSION = "20250821"
                     TASK_LIST_EXT_VERSION = "20260109"
+                    TAKE_LOOK_VERSION = "20260107"
                 }
             }
             Log.forest(
@@ -309,17 +315,22 @@ object AntForestRpcCall {
      * 找能量方法 - 查找可收取能量的好友（带跳过用户列表）
      */
     @JvmStatic
-    fun takeLook(skipUsers: JSONObject, source: String? = null): String {
+    fun takeLook(
+        skipUsers: JSONObject,
+        source: String? = null,
+        exposedUserId: String = "",
+        takeLookStart: Boolean = true
+    ): String {
         return try {
             val actualSource = source ?: DEFAULT_SOURCE
             val requestData = JSONObject().apply {
                 put("contactsStatus", "N")
-                put("exposedUserId", "")
+                put("exposedUserId", exposedUserId)
                 put("skipUsers", skipUsers)
                 put("source", actualSource)
                 put("takeLookEnd", false)
-                put("takeLookStart", true)
-                put("version", VERSION)
+                put("takeLookStart", takeLookStart)
+                put("version", TAKE_LOOK_VERSION)
             }
             RequestManager.requestString("alipay.antforest.forest.h5.takeLook", "[$requestData]")
         } catch (e: JSONException) {

@@ -13,6 +13,9 @@ private val sesameCreditDefaultBlacklist = setOf(
     "去AQ提问",             // 需要下载APP
     "坚持看直播领福利",      // 需要淘宝直播
     "去淘金币逛一逛",        // 需要淘宝操作
+    "zml_zijie_toutiaozhuduan_sanfang", // 今日头条唤端任务，缺少稳定完成RPC闭环
+    "实时看热点",            // 今日头条唤端任务：promiseActivityExtCheck参数错误
+    "头条刷热点领现金",       // 同一template标题变体，避免领取后再次触发频控
     "坚持攒保障金",          // 参数错误：promiseActivityExtCheck
     "芝麻租赁下单得芝麻粒",   // 需要租赁操作
     "去玩小游戏",            // 参数错误：promiseActivityExtCheck
@@ -82,6 +85,7 @@ private val orchardDefaultBlacklist = setOf(
     "ORCHARD_NORMAL_NCLY_GLY",          // 新春限时试玩福利
     "ORCHARD_NCLY_GAME_TASK",           // 试玩农场乐园火爆新游
     "ncflzhrw51",                       // 去游戏中心抢金条：不支持rpc调用
+    "babafarm_cjmk_xdujdd15",           // 去游戏中心玩游戏：不支持rpc调用
     "LINGHUOTIAOKONG",                  // 逛一逛新浪微博
     "ORCHARD_NORMAL_XIANYU_DUAN",       // 逛一逛闲鱼
     "ORCHARD_NORMAL_WAIMAIMIANDAN",     // 逛一逛闪购外卖
@@ -192,6 +196,9 @@ private val forestDefaultBlacklist = setOf(
     "SYH_51HLZ_zhuanhua202604", // 【抢金条】完成游戏任务：不支持rpc调用
     "SYH_51HLZ_shichang202604", // 玩任意游戏30s：不支持rpc调用
     "FKSSJ_QDRW_HUOLI",    // 水世界捡海面物资1次：不支持rpc调用
+    "FKSSJ_LJRW_HUOLI",    // 水世界捡海面物资5次：不支持rpc调用
+    "FKSSJ_LJRWdiaoyu_HUOLI", // 水世界手动钓鱼成功10次：不支持rpc调用
+    "YBLB_TASK_QUDONG",    // 玩一步两步通关1次：不支持rpc调用
     "玩游戏得",             // 森林抽抽乐游戏类任务暂无稳定RPC闭环
     "开宝箱",               // 森林抽抽乐宝箱类任务不在本流程处理
     "疯狂水世界",           // 森林抽抽乐游戏类任务暂无稳定RPC闭环
@@ -244,7 +251,8 @@ private val memberDefaultBlacklist = setOf(
     "逛一逛抖音极速版",
     "玩向西冲冲冲升5级",
     "去设计签名",
-    "个性签名"
+    "个性签名",
+    "会员浮球广告浏览任务" // 浮球后续广告缺少稳定 adBizId/configId 闭环
 )
 
 private val sportsDefaultBlacklist = setOf(
