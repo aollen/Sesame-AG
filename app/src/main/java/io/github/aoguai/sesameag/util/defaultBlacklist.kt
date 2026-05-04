@@ -19,6 +19,7 @@ private val sesameCreditDefaultBlacklist = setOf(
     "坚持攒保障金",          // 参数错误：promiseActivityExtCheck
     "芝麻租赁下单得芝麻粒",   // 需要租赁操作
     "去玩小游戏",            // 参数错误：promiseActivityExtCheck
+    "玩小游戏30秒",          // 参数错误：promiseActivityExtCheck
     "浏览租赁商家小程序",     // 需要小程序操作
     "订阅小组件",            // 参数错误：promiseActivityExtCheck
     "订阅芝麻粒签到提醒",     // 模板失效：PROMISE_TEMPLATE_NOT_EXIST

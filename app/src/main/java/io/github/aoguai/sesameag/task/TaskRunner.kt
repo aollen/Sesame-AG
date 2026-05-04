@@ -13,6 +13,7 @@ import io.github.aoguai.sesameag.task.antForest.AntForest
 import io.github.aoguai.sesameag.task.antMember.AntMember
 import io.github.aoguai.sesameag.task.antOcean.AntOcean
 import io.github.aoguai.sesameag.task.antOrchard.AntOrchard
+import io.github.aoguai.sesameag.task.antSesameCredit.AntSesameCredit
 import io.github.aoguai.sesameag.task.antSports.AntSports
 import io.github.aoguai.sesameag.task.customTasks.ManualTask
 import io.github.aoguai.sesameag.util.Log
@@ -233,8 +234,8 @@ class CoroutineTaskRunner(allModels: List<Model>) {
                 .takeIf { it.isNotEmpty() }
                 ?.let(::add)
 
-            // 6) 会员放在联动行为之后，避免芝麻涨分进度球过早收尾。
-            takeBatch { it is AntMember }
+            // 6) 会员与芝麻信用放在联动行为之后。
+            takeBatch { it is AntMember || it is AntSesameCredit }
                 .takeIf { it.isNotEmpty() }
                 ?.let(::add)
 

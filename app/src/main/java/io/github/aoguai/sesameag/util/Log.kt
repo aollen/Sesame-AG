@@ -165,6 +165,11 @@ object Log {
     }
 
     @JvmStatic
+    fun dodo(msg: String) {
+        business(LogChannel.DODO, msg)
+    }
+
+    @JvmStatic
     fun member(msg: String) {
         business(LogChannel.MEMBER, msg)
     }

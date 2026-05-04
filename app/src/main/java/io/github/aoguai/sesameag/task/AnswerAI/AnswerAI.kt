@@ -174,6 +174,7 @@ class AnswerAI : Model() {
                 LogChannel.FARM,
                 LogChannel.STALL,
                 LogChannel.OCEAN,
+                LogChannel.DODO,
                 LogChannel.MEMBER,
                 LogChannel.SPORTS,
                 LogChannel.GREEN_FINANCE,
@@ -189,6 +190,7 @@ class AnswerAI : Model() {
                 LogChannel.ORCHARD -> Log.orchard(msg)
                 LogChannel.STALL -> Log.stall(msg)
                 LogChannel.OCEAN -> Log.ocean(msg)
+                LogChannel.DODO -> Log.dodo(msg)
                 LogChannel.MEMBER -> Log.member(msg)
                 LogChannel.SPORTS -> Log.sports(msg)
                 LogChannel.GREEN_FINANCE -> Log.greenFinance(msg)

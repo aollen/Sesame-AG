@@ -10,7 +10,7 @@ package io.github.aoguai.sesameag.data
  *
  * 命名规范：
  * - 常量名：全大写 + 下划线（FLAG_XXX）
- * - 常量值：实际存储使用的 Key（保持历史兼容）
+ * - 常量值：实际存储使用的 Key
  *
  * 状态语义：
  * - 完成态：任务或奖励已经确认完成，通常用于同日短路，避免重复请求。
@@ -20,7 +20,7 @@ package io.github.aoguai.sesameag.data
  * 使用约束：
  * - 只有成功闭环或明确业务终态才能落完成/止损标记。
  * - 参数错误、RPC 未验证、抓包不足不应伪装成完成态；需要保留日志上下文或进入待支持/补抓流程。
- * - 新增 flag 时优先使用“模块名::业务名::状态”的值格式，历史 key 保持不动以兼容旧配置和旧状态文件。
+ * - 新增 flag 时优先使用“模块名::业务名::状态”的值格式；是否保留历史 key 由对应重构策略决定。
  */
 object StatusFlags {
 
@@ -109,18 +109,6 @@ object StatusFlags {
     /** 今日会员任务因风控/离线止损，不再继续刷新 */
     const val FLAG_ANTMEMBER_MEMBER_TASK_RISK_STOP_TODAY: String = "AntMember::memberTaskRiskStopToday"
 
-    /** 是否已执行「领取所有可做芝麻任务」 */
-    const val FLAG_ANTMEMBER_DO_ALL_SESAME_TASK: String = "AntMember::doAllAvailableSesameTask"
-
-    /** 芝麻信用：当日加入任务次数已达上限（PROMISE_TODAY_FINISH_TIMES_LIMIT），用于止损避免重复请求 */
-    const val FLAG_ANTMEMBER_SESAME_JOIN_LIMIT_REACHED: String = "AntMember::sesameJoinLimitReached"
-
-    /** 今日是否已处理「芝麻粒福利签到」(zml check-in) */
-    const val FLAG_ANTMEMBER_ZML_CHECKIN_DONE: String = "AntMember::zmlCheckInDone"
-
-    /** 今日是否已处理「芝麻粒领取」(credit feedback collect) */
-    const val FLAG_ANTMEMBER_COLLECT_SESAME_DONE: String = "AntMember::collectSesameDone"
-
     /** 今日贴纸领取任务 */
     const val FLAG_ANTMEMBER_STICKER: String = "Flag_AntMember_Sticker"
 
@@ -131,11 +119,23 @@ object StatusFlags {
     // 芝麻信用 / 芝麻粒
     // ============================================================
 
-    /** 芝麻粒炼金：次日奖励是否已领取 */
-    const val FLAG_ZMXY_ALCHEMY_NEXT_DAY_AWARD: String = "zmxy::alchemy::nextDayAward"
+    /** 芝麻信用：今日是否已处理全部可执行任务 */
+    const val FLAG_SESAME_DO_ALL_AVAILABLE_TASK: String = "AntSesameCredit::doAllAvailableSesameTask"
 
-    /** 芝麻粒兑换：今日商品刷新与兑换扫描已处理 */
-    const val FLAG_ZMXY_GRAIN_EXCHANGE_DONE: String = "sesameGrainExchange::done"
+    /** 芝麻信用：当日加入任务次数已达上限 */
+    const val FLAG_SESAME_JOIN_LIMIT_REACHED: String = "AntSesameCredit::sesameJoinLimitReached"
+
+    /** 芝麻信用：今日是否已处理芝麻粒福利签到 */
+    const val FLAG_SESAME_ZML_CHECKIN_DONE: String = "AntSesameCredit::zmlCheckInDone"
+
+    /** 芝麻信用：今日是否已处理芝麻粒领取 */
+    const val FLAG_SESAME_COLLECT_DONE: String = "AntSesameCredit::collectSesameDone"
+
+    /** 芝麻信用：芝麻粒炼金次日奖励是否已领取 */
+    const val FLAG_SESAME_ALCHEMY_NEXT_DAY_AWARD: String = "AntSesameCredit::alchemy::nextDayAward"
+
+    /** 芝麻信用：芝麻粒兑换今日是否已处理 */
+    const val FLAG_SESAME_GRAIN_EXCHANGE_DONE: String = "AntSesameCredit::sesameGrainExchangeDone"
 
     /** 信用 2101：图鉴章节任务是否全部完成 */
     const val FLAG_CREDIT2101_CHAPTER_TASK_DONE: String = "FLAG_Credit2101_ChapterTask_Done"

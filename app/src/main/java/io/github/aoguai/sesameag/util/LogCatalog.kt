@@ -7,6 +7,7 @@ enum class LogModuleDomain(val displayName: String) {
     FARM("蚂蚁庄园"),
     STALL("蚂蚁新村"),
     OCEAN("神奇海洋"),
+    DODO("神奇物种"),
     MEMBER("会员"),
     SPORTS("运动"),
     GREEN_FINANCE("绿色经营"),
@@ -137,6 +138,17 @@ enum class LogChannel(
         mirrorToRecord = true,
         visibleInViewer = true,
         logTag = "海洋"
+    ),
+    DODO(
+        loggerName = "dodo",
+        displayName = "神奇物种日志",
+        moduleDomain = LogModuleDomain.DODO,
+        techKind = LogTechKind.BUSINESS,
+        description = "神奇物种抽卡、道具、任务奖励与图鉴合成相关日志",
+        viewerGroup = LogViewerGroup.MODULES,
+        mirrorToRecord = true,
+        visibleInViewer = true,
+        logTag = "神奇物种"
     ),
     MEMBER(
         loggerName = "member",

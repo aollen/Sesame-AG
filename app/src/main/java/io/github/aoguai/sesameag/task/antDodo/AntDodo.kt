@@ -38,7 +38,7 @@ class AntDodo : ModelTask() {
 
     override fun getName(): String = "神奇物种"
 
-    override fun getGroup(): ModelGroup = ModelGroup.FOREST
+    override fun getGroup(): ModelGroup = ModelGroup.DODO
 
     override fun getIcon(): String = "AntDodo.png"
 
@@ -108,11 +108,11 @@ class AntDodo : ModelTask() {
     override fun check(): Boolean {
         return when {
             TaskCommon.IS_ENERGY_TIME -> {
-                Log.forest("⏸ 当前为只收能量时间【${BaseModel.energyTime.value}】，停止执行${getName()}任务！")
+                Log.dodo("⏸ 当前为只收能量时间【${BaseModel.energyTime.value}】，停止执行${getName()}任务！")
                 false
             }
             TaskCommon.IS_MODULE_SLEEP_TIME -> {
-                Log.forest("💤 模块休眠时间【${BaseModel.modelSleepTime.value}】停止执行${getName()}任务！")
+                Log.dodo("💤 模块休眠时间【${BaseModel.modelSleepTime.value}】停止执行${getName()}任务！")
                 false
             }
             else -> true
@@ -121,7 +121,7 @@ class AntDodo : ModelTask() {
 
     override fun runJava() {
         try {
-            Log.forest("执行开始-${getName()}")
+            Log.dodo("执行开始-${getName()}")
             handledTaskFinishes.clear()
             handledTaskAwards.clear()
             receiveTaskAward()
@@ -142,7 +142,7 @@ class AntDodo : ModelTask() {
             Log.runtime(TAG, "start.run err:")
             Log.printStackTrace(TAG, t)
         } finally {
-            Log.forest("执行结束-${getName()}")
+            Log.dodo("执行结束-${getName()}")
         }
     }
 
@@ -169,7 +169,7 @@ class AntDodo : ModelTask() {
             if (ResChecker.checkRes(TAG, jo)) {
                 val data = jo.getJSONObject("data")
                 if (data.getBoolean("collect")) {
-                    Log.forest("神奇物种卡片今日收集完成！")
+                    Log.dodo("神奇物种卡片今日收集完成！")
                 } else {
                     collectAnimalCard()
                 }
@@ -222,7 +222,7 @@ class AntDodo : ModelTask() {
                             val animal = data.getJSONObject("animal")
                             val ecosystem = animal.getString("ecosystem")
                             val name = animal.getString("name")
-                            Log.forest("神奇物种🦕[$ecosystem]#$name")
+                            Log.dodo("神奇物种🦕[$ecosystem]#$name")
                             if (giftTargetUserId != null) {
                                 val fantasticStarQuantity = animal.optInt("fantasticStarQuantity", 0)
                                 if (fantasticStarQuantity == 3) {
@@ -258,7 +258,7 @@ class AntDodo : ModelTask() {
                 }
                 val jsonResponse = JSONObject(response)
                 if (!ResChecker.checkRes(TAG, jsonResponse)) {
-                    Log.forest("查询任务列表失败：${jsonResponse.optString("resultDesc")}")
+                    Log.dodo("查询任务列表失败：${jsonResponse.optString("resultDesc")}")
                     break
                 }
                 val taskGroupInfoList = jsonResponse.optJSONObject("data")?.optJSONArray("taskGroupInfoList") ?: break
@@ -289,9 +289,9 @@ class AntDodo : ModelTask() {
                                 if (isDodoTaskRpcSuccess(joAward)) {
                                     handledTaskAwards.add(taskKey)
                                     doubleCheck = true
-                                    Log.forest("任务奖励🎖️[$taskTitle]#${awardCount}个")
+                                    Log.dodo("任务奖励🎖️[$taskTitle]#${awardCount}个")
                                 } else {
-                                    Log.forest("领取失败[$taskTitle]：${joAward.optString("resultDesc", joAward.toString())}")
+                                    Log.dodo("领取失败[$taskTitle]：${joAward.optString("resultDesc", joAward.toString())}")
                                     if (isTaskTerminalFailure(joAward)) {
                                         handledTaskAwards.add(taskKey)
                                     }
@@ -319,14 +319,14 @@ class AntDodo : ModelTask() {
                                 val joFinishTask = JSONObject(finishResponse)
                                 if (isDodoTaskRpcSuccess(joFinishTask)) {
                                     handledTaskFinishes.add(taskKey)
-                                    Log.forest("物种任务🧾️[$taskTitle]")
+                                    Log.dodo("物种任务🧾️[$taskTitle]")
                                     doubleCheck = true
                                 } else {
                                     val errorCode = joFinishTask.optString("code")
                                         .ifBlank { joFinishTask.optString("resultCode") }
                                     val resultDesc = joFinishTask.optString("desc")
                                         .ifBlank { joFinishTask.optString("resultDesc") }
-                                    Log.forest("完成任务失败[$taskTitle] code=${errorCode.ifBlank { "UNKNOWN" }} msg=$resultDesc"
+                                    Log.dodo("完成任务失败[$taskTitle] code=${errorCode.ifBlank { "UNKNOWN" }} msg=$resultDesc"
                                     )
                                     if (isTaskTerminalFailure(joFinishTask)) {
                                         handledTaskFinishes.add(taskKey)
@@ -420,7 +420,7 @@ class AntDodo : ModelTask() {
                 if (ResChecker.checkRes(TAG, jo)) {
                     val propList = jo.getJSONObject("data").optJSONArray("propList")
                     if (propList == null || propList.length() == 0) {
-                        Log.forest("神奇物种道具跳过：未找到可使用的道具")
+                        Log.dodo("神奇物种道具跳过：未找到可使用的道具")
                         return
                     }
                     for (i in 0 until propList.length()) {
@@ -429,7 +429,7 @@ class AntDodo : ModelTask() {
                         val propName = prop.optJSONObject("propConfig")?.optString("propName")
                             ?.takeIf { it.isNotBlank() } ?: propType
                         if (!isUsePropType(propType)) {
-                            Log.forest("神奇物种道具跳过[$propName]：配置未开启")
+                            Log.dodo("神奇物种道具跳过[$propName]：配置未开启")
                             continue
                         }
                         val propIdList = prop.optJSONArray("propIdList")
@@ -443,11 +443,11 @@ class AntDodo : ModelTask() {
                         val consumeTarget = consumeTargetResult?.target
                         if (isUniversalCardProp(propType)) {
                             if (consumeTargetResult == null || !consumeTargetResult.querySucceeded) {
-                                Log.forest("神奇物种道具跳过[$propName]：目标卡查询失败")
+                                Log.dodo("神奇物种道具跳过[$propName]：目标卡查询失败")
                                 continue
                             }
                             if (consumeTarget == null) {
-                                Log.forest("神奇物种道具跳过[$propName]：未找到可兑换的目标卡片")
+                                Log.dodo("神奇物种道具跳过[$propName]：未找到可兑换的目标卡片")
                                 continue
                             }
                         }
@@ -458,7 +458,7 @@ class AntDodo : ModelTask() {
                         }
                         val joConsume = JSONObject(consumeResponse)
                         if (!ResChecker.checkRes(TAG, joConsume)) {
-                            Log.forest("神奇物种道具使用失败[$propName]：${joConsume.optString("resultDesc", "未知错误")}")
+                            Log.dodo("神奇物种道具使用失败[$propName]：${joConsume.optString("resultDesc", "未知错误")}")
                             Log.runtime(joConsume.toString())
                             continue
                         }
@@ -467,7 +467,7 @@ class AntDodo : ModelTask() {
                         if (animal != null) {
                             val ecosystem = animal.optString("ecosystem")
                             val name = animal.optString("name")
-                            Log.forest("使用道具🎭[$propName]#${formatAnimalDisplayName(ecosystem, name)}")
+                            Log.dodo("使用道具🎭[$propName]#${formatAnimalDisplayName(ecosystem, name)}")
                             if (giftTargetUserId != null && isUniversalCardProp(propType)) {
                                 val fantasticStarQuantity = animal.optInt("fantasticStarQuantity", 0)
                                 if (fantasticStarQuantity == 3) {
@@ -475,7 +475,7 @@ class AntDodo : ModelTask() {
                                 }
                             }
                         } else {
-                            Log.forest("使用道具🎭[$propName]")
+                            Log.dodo("使用道具🎭[$propName]")
                         }
                         logPropRefreshState(propType, propName, consumeTarget, animal)
                         GlobalThreadPools.sleepCompat(300)
@@ -686,7 +686,7 @@ class AntDodo : ModelTask() {
             }
         }
         if (refreshParts.isNotEmpty()) {
-            Log.forest("神奇物种道具刷新[$propName]：${refreshParts.joinToString("，")}")
+            Log.dodo("神奇物种道具刷新[$propName]：${refreshParts.joinToString("，")}")
         }
     }
 
@@ -779,7 +779,7 @@ class AntDodo : ModelTask() {
             if (availableFriends.contains(safeUserId)) {
                 return safeUserId
             }
-            Log.forest("神奇物种送卡跳过[${UserMap.getMaskName(safeUserId) ?: safeUserId}]：对方未开通神奇物种")
+            Log.dodo("神奇物种送卡跳过[${UserMap.getMaskName(safeUserId) ?: safeUserId}]：对方未开通神奇物种")
         }
         return null
     }
@@ -854,7 +854,7 @@ class AntDodo : ModelTask() {
             }
             val jo = JSONObject(socialResponse)
             if (ResChecker.checkRes(TAG, jo)) {
-                Log.forest("赠送卡片🦕[${UserMap.getMaskName(targetUser)}]#$ecosystem-$name")
+                Log.dodo("赠送卡片🦕[${UserMap.getMaskName(targetUser)}]#$ecosystem-$name")
             } else {
                 Log.runtime(TAG, jo.getString("resultDesc"))
             }
@@ -914,7 +914,7 @@ class AntDodo : ModelTask() {
                         val ecosystem = jo.getJSONObject("data").getJSONObject("animal").getString("ecosystem")
                         val name = jo.getJSONObject("data").getJSONObject("animal").getString("name")
                         val userName = UserMap.getMaskName(useId)
-                        Log.forest("神奇物种🦕帮好友[$userName]抽卡[$ecosystem]#$name")
+                        Log.dodo("神奇物种🦕帮好友[$userName]抽卡[$ecosystem]#$name")
                         count--
                         handled = true
                     } else if (!ResChecker.isSilentFailure(jo)) {
@@ -1107,10 +1107,10 @@ class AntDodo : ModelTask() {
         }
         val jo = JSONObject(medalResponse)
         if (!ResChecker.checkRes(TAG, jo)) {
-            Log.forest("合成图鉴失败[${ecosystem.ifBlank { bookId }}]：${jo.optString("resultDesc", jo.toString())}")
+            Log.dodo("合成图鉴失败[${ecosystem.ifBlank { bookId }}]：${jo.optString("resultDesc", jo.toString())}")
             return false
         }
-        Log.forest("神奇物种🦕合成勋章[${ecosystem.ifBlank { bookId }}]")
+        Log.dodo("神奇物种🦕合成勋章[${ecosystem.ifBlank { bookId }}]")
         return true
     }
 

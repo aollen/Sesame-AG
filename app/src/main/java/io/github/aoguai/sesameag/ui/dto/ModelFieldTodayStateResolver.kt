@@ -102,20 +102,20 @@ object ModelFieldTodayStateResolver {
                     "今日会员积分兑换权益已处理"
                 )
 
-            "AntMember.sesameTask" ->
-                flag(StatusFlags.FLAG_ANTMEMBER_DO_ALL_SESAME_TASK, "今日芝麻信用任务已处理")
+            "AntSesameCredit.sesameTask" ->
+                flag(StatusFlags.FLAG_SESAME_DO_ALL_AVAILABLE_TASK, "今日芝麻信用任务已处理")
 
-            "AntMember.collectSesame",
-            "AntMember.collectSesameWithOneClick" ->
-                flag(StatusFlags.FLAG_ANTMEMBER_COLLECT_SESAME_DONE, "今日芝麻奖励已领取")
+            "AntSesameCredit.collectSesame",
+            "AntSesameCredit.collectSesameWithOneClick" ->
+                flag(StatusFlags.FLAG_SESAME_COLLECT_DONE, "今日芝麻奖励已领取")
 
-            "AntMember.sesameGrainExchange" ->
-                flag(StatusFlags.FLAG_ZMXY_GRAIN_EXCHANGE_DONE, "今日芝麻粒兑换已处理")
+            "AntSesameCredit.sesameGrainExchange" ->
+                flag(StatusFlags.FLAG_SESAME_GRAIN_EXCHANGE_DONE, "今日芝麻粒兑换已处理")
 
-            "AntMember.sesameGrainExchangeList" ->
+            "AntSesameCredit.sesameGrainExchangeList" ->
                 selectedSetFlagState(
                     modelField,
-                    StatusFlags.FLAG_ZMXY_GRAIN_EXCHANGE_DONE,
+                    StatusFlags.FLAG_SESAME_GRAIN_EXCHANGE_DONE,
                     "今日芝麻粒兑换已处理"
                 )
 
