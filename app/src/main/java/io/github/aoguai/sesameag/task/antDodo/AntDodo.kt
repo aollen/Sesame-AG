@@ -663,6 +663,14 @@ class AntDodo : ModelTask() {
             collectDetail.optInt("count", 0) > 0
     }
 
+    private fun hasAnimalCardForBookMedal(collectDetail: JSONObject?): Boolean {
+        if (collectDetail == null) {
+            return false
+        }
+        return collectDetail.optBoolean("collect") ||
+            collectDetail.optInt("count", 0) > 0
+    }
+
     private fun logPropRefreshState(
         propType: String,
         propName: String,
@@ -1082,7 +1090,7 @@ class AntDodo : ModelTask() {
             var hasMedalPending = false
             for (i in 0 until animalForUserList.length()) {
                 val collectDetail = animalForUserList.optJSONObject(i)?.optJSONObject("collectDetail")
-                if (!isCollectedAnimal(collectDetail)) {
+                if (!hasAnimalCardForBookMedal(collectDetail)) {
                     return false
                 }
                 if (collectDetail?.optBoolean("hasGeneratedBookMedal") != true) {
